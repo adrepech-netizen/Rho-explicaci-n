@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+
+  <head>
+    <meta charset="UTF-8">
+    <title>Lambda de Heckman</title>
+    
+
+  </head>
+    
+  <body>
+  <!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Heckman Dinámico: Rho Variable y Ejemplos</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation"></script>
+  <style>
+    body { font-family: 'Segoe UI', sans-serif; background: #f0f2f5; margin: 0; padding: 10px; text-align: center; }
+    
+    .container { 
+      width: 100%; max-width: 900px; margin: 0 auto; 
+      background: white; padding: 15px; box-sizing: border-box; 
+      border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); 
+    }
+
+    h2 { color: #2c3e50; font-size: 1.2em; margin: 5px 0; }
+
+    /* Panel de Controles */
+    .controls-panel { 
+      background: #e8f4fd; padding: 15px; border-radius: 8px; 
+      margin-bottom: 15px; border: 1px solid #d0e6f9;
+      text-align: left;
+    }
+    label { font-size: 0.9em; font-weight: bold; color: #34495e; }
+    input[type=range] { width: 100%; height: 25px; cursor: pointer; margin: 5px 0 15px 0; }
+
+    /* Stats */
+    .stats { display: flex; flex-direction: column; gap: 10px; margin-bottom: 15px; font-size: 0.9em; }
+    .stat-box { padding: 8px; border-radius: 8px; color: white; font-weight: bold; }
+    .real { background-color: #34495e; }
+    .obs { background-color: #e74c3c; }
+
+    .chart-wrapper { position: relative; height: 300px; width: 100%; }
+
+    /* Caja Explicativa Dinámica */
+    #explainerBox {
+      background: #fff9c4; border: 2px solid #fbc02d; 
+      padding: 10px; border-radius: 8px; text-align: left; 
+      font-size: 0.85em; color: #333; margin-top: 15px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+    }
+    .highlight { font-weight: bold; }
+
+    @media (min-width: 768px) {
+      .stats { flex-direction: row; }
+      .chart-wrapper { height: 450px; }
+      #explainerBox {
+        position: absolute; top: 10px; right: 10px; width: 240px; margin-top: 0;
+        opacity: 0.98; pointer-events: none; box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+      }
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <h2>🔄 Simulador Total: Tipos de Selección</h2>
+  
+  <div class="controls-panel">
+    <label>1. Tipo de Selección (Rho): <span id="valRho" style="color:#2980b9">0.0</span></label>
+    <input type="range" id="rhoSlider" min="-0.9" max="0.9" step="0.1" value="-0.8">
+    <div style="display:flex; justify-content:space-between; font-size:0.75em; color:#666; margin-top:-10px; margin-bottom:10px;">
+      <span>Negativa (Necesidad)</span> <span>0 (Sin Sesgo)</span>
+      <span>Positiva (Habilidades)</span>
+    </div>
+
+    <label>2. Barrera de Entrada (Corte):</label>
+    <input type="range" id="threshold" min="-2.5" max="2.5" step="0.1" value="0">
+  </div>
+
+  <div class="stats">
+    <div class="stat-box real">Media REAL: <span id="meanTrue">0</span></div>
+    <div class="stat-box obs">Media OBSERVADA: <span id="meanObs">0</span></div>
+  </div>
+
+  <div class="chart-wrapper">
+    <canvas id="myChart"></canvas>
+    
+    <div id="explainerBox">
+      <h4 style="margin:0 0 5px 0; color:#e65100;" id="boxTitle">💡 Interpretación:</h4>
+      <p id="boxText" style="margin:0; line-height:1.4;">Cargando...</p>
+    </div>
+  </div>
+</div>
+
+<script>
+// --- CONFIGURACIÓN ---
+const N = 500; 
+let currentRho = -0.8; // Valor inicial
+let dataPoints = [];
+let chart;
+
+// Generador Normal
+function randn_bm() {
+    let u = 0, v = 0;
+    while(u === 0) u = Math.random();
+    while(v === 0) v = Math.random();
+    return Math.sqrt( -2.0 * Math.log( u ) ) * Math.cos( 2.0 * Math.PI * v );
+}
+
+// Generar Datos (Dinámico según Rho)
+function generateData() {
+  dataPoints = [];
+  for(let i=0; i<N; i++) {
+    let z = randn_bm(); 
+    let e_uncorr = randn_bm();
+    
+    // Fórmula Clave: Correlacionar errores
+    let e = (currentRho * z) + (Math.sqrt(1 - currentRho*currentRho) * e_uncorr);
+    let hours = 50 + (10 * e); 
+    
+    dataPoints.push({ x: z, y: hours });
+  }
+}
+
+function initChart() {
+  const ctx = document.getElementById('myChart').getContext('2d');
+  chart = new Chart(ctx, {
+    type: 'scatter',
+    data: {
+        datasets: [
+          { label: 'Observadas', data: [], backgroundColor: 'rgba(46, 204, 113, 0.8)', pointRadius: 2 },
+          { label: 'Ocultas', data: [], backgroundColor: 'rgba(200, 200, 200, 0.3)', pointRadius: 1 },
+          { type: 'line', label: 'Real', data: [], borderColor: '#2c3e50', borderWidth: 2, borderDash: [5, 5], pointRadius: 0, order: 1 },
+          { type: 'line', label: 'Sesgada', data: [], borderColor: '#e74c3c', borderWidth: 3, pointRadius: 0, order: 0 }
+        ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        x: { min: -3.5, max: 3.5, grid: { display:false }, ticks: { display:false } }, 
+        y: { title: { display: true, text: 'Resultado (Y)' }, min: 10, max: 90 }
+      },
+      plugins: {
+        legend: { display: false },
+        annotation: { annotations: {} }
+      }
+    }
+  });
+}
+
+function updateChart() {
+  const threshold = parseFloat(document.getElementById('threshold').value);
+  const observed = [];
+  const hidden = [];
+  let sumObs = 0;
+  let sumTrue = 0;
+  
+  dataPoints.forEach(p => {
+    sumTrue += p.y;
+    if (p.x > threshold) {
+      observed.push(p);
+      sumObs += p.y;
+    } else {
+      hidden.push(p);
+    }
+  });
+  
+  const meanTrue = sumTrue / N;
+  const meanObs = observed.length > 0 ? sumObs / observed.length : meanTrue;
+  
+  // Actualizar DOM
+  document.getElementById('meanTrue').innerText = meanTrue.toFixed(1);
+  document.getElementById('meanObs').innerText = meanObs.toFixed(1);
+  document.getElementById('valRho').innerText = currentRho.toFixed(1);
+  
+  // Actualizar Gráfico
+  chart.data.datasets[0].data = observed;
+  chart.data.datasets[1].data = hidden;
+  chart.data.datasets[2].data = [{x: -3.5, y: meanTrue}, {x: 3.5, y: meanTrue}];
+  chart.data.datasets[3].data = [{x: threshold, y: meanObs}, {x: 3.5, y: meanObs}];
+
+  // Lógica de la Caja Explicativa
+  const boxTitle = document.getElementById('boxTitle');
+  const boxText = document.getElementById('boxText');
+  const box = document.getElementById('explainerBox');
+
+  if (currentRho < -0.2) {
+      // NEGATIVA (CAMBIO AQUÍ CON EJEMPLO)
+      box.style.borderColor = "#e74c3c"; 
+      box.style.background = "#fadbd8";
+      boxTitle.innerText = "📉 Selección Negativa";
+      boxTitle.style.color = "#c0392b";
+      boxText.innerHTML = "Las que entran tienen factores no observados que bajan su resultado.<br><br><strong>Ejemplo:</strong> Mujeres con urgencia económica que aceptan empleos precarios o de pocas horas. Esto tira el promedio observado hacia abajo.";
+  } else if (currentRho > 0.2) {
+      // POSITIVA
+      box.style.borderColor = "#27ae60"; 
+      box.style.background = "#d5f5e3";
+      boxTitle.innerText = "📈 Selección Positiva";
+      boxTitle.style.color = "#2ecc71";
+      boxText.innerHTML = "Las que entran tienen factores no observados que suben su resultado.<br><br><strong>Ejemplo:</strong> Personas con alto talento innato o motivación que consiguen salarios muy altos. Esto infla el promedio observado.";
+  } else {
+      // NEUTRA
+      box.style.borderColor = "#bdc3c7"; 
+      box.style.background = "#f4f6f7";
+      boxTitle.innerText = "⚖️ Sin Sesgo Claro";
+      boxTitle.style.color = "#7f8c8d";
+      boxText.innerHTML = "La correlación es débil.<br>La media observada es muy similar a la real.<br>El MCO funcionaría bien aquí.";
+  }
+
+  // Flecha de Sesgo
+  const annotations = {};
+  if (Math.abs(meanObs - meanTrue) > 1 && threshold > -2) {
+      annotations.biasArrow = {
+        type: 'line',
+        xMin: threshold + 0.5, xMax: threshold + 0.5,
+        yMin: meanTrue, yMax: meanObs,
+        borderColor: '#f1c40f', borderWidth: 3,
+        arrowHeads: { end: { display: true, fill: true, size: 10 } }
+      };
+  }
+  chart.options.plugins.annotation.annotations = annotations;
+  chart.update();
+}
+
+// Event Listeners
+document.getElementById('threshold').addEventListener('input', updateChart);
+
+document.getElementById('rhoSlider').addEventListener('input', function() {
+    currentRho = parseFloat(this.value);
+    generateData(); // Regenerar datos al cambiar Rho
+    updateChart();
+});
+
+// Init
+generateData();
+initChart();
+setTimeout(updateChart, 500);
+</script>
+</body>
+</html>
+    
+  </body>
+  
+</html>
