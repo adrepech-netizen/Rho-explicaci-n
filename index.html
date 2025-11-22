@@ -1,27 +1,16 @@
 <!DOCTYPE html>
-<html lang="en">
-
-  <head>
-    <meta charset="UTF-8">
-    <title>Lambda de Heckman</title>
-    
-
-  </head>
-    
-  <body>
-  <!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Heckman Dinámico: Rho Variable y Ejemplos</title>
+  <title>Heckman Dinámico: Layout Corregido</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation"></script>
   <style>
     body { font-family: 'Segoe UI', sans-serif; background: #f0f2f5; margin: 0; padding: 10px; text-align: center; }
     
     .container { 
-      width: 100%; max-width: 900px; margin: 0 auto; 
+      width: 100%; max-width: 1000px; margin: 0 auto; 
       background: white; padding: 15px; box-sizing: border-box; 
       border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); 
     }
@@ -43,23 +32,53 @@
     .real { background-color: #34495e; }
     .obs { background-color: #e74c3c; }
 
-    .chart-wrapper { position: relative; height: 300px; width: 100%; }
+    /* --- LAYOUT DEL GRÁFICO --- */
+    /* Este contenedor maneja la posición flexible */
+    .chart-layout {
+      display: flex;
+      flex-direction: column; /* Por defecto en móvil: Columna (uno abajo del otro) */
+      gap: 15px;
+      width: 100%;
+    }
+
+    /* El contenedor del canvas */
+    .canvas-holder {
+      position: relative;
+      height: 300px; 
+      width: 100%;
+    }
 
     /* Caja Explicativa Dinámica */
     #explainerBox {
       background: #fff9c4; border: 2px solid #fbc02d; 
-      padding: 10px; border-radius: 8px; text-align: left; 
-      font-size: 0.85em; color: #333; margin-top: 15px;
+      padding: 15px; border-radius: 8px; text-align: left; 
+      font-size: 0.85em; color: #333;
       box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+      width: 100%; /* En móvil ocupa todo el ancho */
+      box-sizing: border-box;
+      height: fit-content; /* Altura automática */
     }
+
     .highlight { font-weight: bold; }
 
+    /* --- ESTILOS PARA PC (Pantallas grandes) --- */
     @media (min-width: 768px) {
       .stats { flex-direction: row; }
-      .chart-wrapper { height: 450px; }
+      
+      /* Aquí está la magia: Lado a Lado */
+      .chart-layout {
+        flex-direction: row; /* Poner en fila */
+        align-items: flex-start;
+      }
+      
+      .canvas-holder {
+        height: 450px; 
+        width: 70%; /* El gráfico toma el 70% */
+      }
+      
       #explainerBox {
-        position: absolute; top: 10px; right: 10px; width: 240px; margin-top: 0;
-        opacity: 0.98; pointer-events: none; box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+        width: 30%; /* La caja toma el 30% restante */
+        margin-top: 20px; /* Un poco de espacio arriba */
       }
     }
   </style>
@@ -73,7 +92,8 @@
     <label>1. Tipo de Selección (Rho): <span id="valRho" style="color:#2980b9">0.0</span></label>
     <input type="range" id="rhoSlider" min="-0.9" max="0.9" step="0.1" value="-0.8">
     <div style="display:flex; justify-content:space-between; font-size:0.75em; color:#666; margin-top:-10px; margin-bottom:10px;">
-      <span>Negativa (Necesidad)</span> <span>0 (Sin Sesgo)</span>
+      <span>Negativa (Necesidad)</span>
+      <span>0 (Sin Sesgo)</span>
       <span>Positiva (Habilidades)</span>
     </div>
 
@@ -86,24 +106,26 @@
     <div class="stat-box obs">Media OBSERVADA: <span id="meanObs">0</span></div>
   </div>
 
-  <div class="chart-wrapper">
-    <canvas id="myChart"></canvas>
+  <div class="chart-layout">
+    <div class="canvas-holder">
+      <canvas id="myChart"></canvas>
+    </div>
     
     <div id="explainerBox">
       <h4 style="margin:0 0 5px 0; color:#e65100;" id="boxTitle">💡 Interpretación:</h4>
       <p id="boxText" style="margin:0; line-height:1.4;">Cargando...</p>
     </div>
   </div>
+
 </div>
 
 <script>
 // --- CONFIGURACIÓN ---
 const N = 500; 
-let currentRho = -0.8; // Valor inicial
+let currentRho = -0.8; 
 let dataPoints = [];
 let chart;
 
-// Generador Normal
 function randn_bm() {
     let u = 0, v = 0;
     while(u === 0) u = Math.random();
@@ -111,17 +133,13 @@ function randn_bm() {
     return Math.sqrt( -2.0 * Math.log( u ) ) * Math.cos( 2.0 * Math.PI * v );
 }
 
-// Generar Datos (Dinámico según Rho)
 function generateData() {
   dataPoints = [];
   for(let i=0; i<N; i++) {
     let z = randn_bm(); 
     let e_uncorr = randn_bm();
-    
-    // Fórmula Clave: Correlacionar errores
     let e = (currentRho * z) + (Math.sqrt(1 - currentRho*currentRho) * e_uncorr);
     let hours = 50 + (10 * e); 
-    
     dataPoints.push({ x: z, y: hours });
   }
 }
@@ -173,43 +191,38 @@ function updateChart() {
   const meanTrue = sumTrue / N;
   const meanObs = observed.length > 0 ? sumObs / observed.length : meanTrue;
   
-  // Actualizar DOM
   document.getElementById('meanTrue').innerText = meanTrue.toFixed(1);
   document.getElementById('meanObs').innerText = meanObs.toFixed(1);
   document.getElementById('valRho').innerText = currentRho.toFixed(1);
   
-  // Actualizar Gráfico
   chart.data.datasets[0].data = observed;
   chart.data.datasets[1].data = hidden;
   chart.data.datasets[2].data = [{x: -3.5, y: meanTrue}, {x: 3.5, y: meanTrue}];
   chart.data.datasets[3].data = [{x: threshold, y: meanObs}, {x: 3.5, y: meanObs}];
 
-  // Lógica de la Caja Explicativa
+  // Lógica Caja Explicativa
   const boxTitle = document.getElementById('boxTitle');
   const boxText = document.getElementById('boxText');
   const box = document.getElementById('explainerBox');
 
   if (currentRho < -0.2) {
-      // NEGATIVA (CAMBIO AQUÍ CON EJEMPLO)
       box.style.borderColor = "#e74c3c"; 
       box.style.background = "#fadbd8";
       boxTitle.innerText = "📉 Selección Negativa";
       boxTitle.style.color = "#c0392b";
-      boxText.innerHTML = "Las que entran tienen factores no observados que bajan su resultado.<br><br><strong>Ejemplo:</strong> Mujeres con urgencia económica que aceptan empleos precarios o de pocas horas. Esto tira el promedio observado hacia abajo.";
+      boxText.innerHTML = "Las que entran tienen factores no observados que bajan su resultado.<br><br><strong>Ejemplo:</strong> Necesidad urgente que lleva a aceptar empleos precarios. Promedio observado cae.";
   } else if (currentRho > 0.2) {
-      // POSITIVA
       box.style.borderColor = "#27ae60"; 
       box.style.background = "#d5f5e3";
       boxTitle.innerText = "📈 Selección Positiva";
       boxTitle.style.color = "#2ecc71";
-      boxText.innerHTML = "Las que entran tienen factores no observados que suben su resultado.<br><br><strong>Ejemplo:</strong> Personas con alto talento innato o motivación que consiguen salarios muy altos. Esto infla el promedio observado.";
+      boxText.innerHTML = "Las que entran tienen factores no observados que suben su resultado.<br><br><strong>Ejemplo:</strong> Alto talento innato que logra mejores salarios. Promedio observado sube.";
   } else {
-      // NEUTRA
       box.style.borderColor = "#bdc3c7"; 
       box.style.background = "#f4f6f7";
       boxTitle.innerText = "⚖️ Sin Sesgo Claro";
       boxTitle.style.color = "#7f8c8d";
-      boxText.innerHTML = "La correlación es débil.<br>La media observada es muy similar a la real.<br>El MCO funcionaría bien aquí.";
+      boxText.innerHTML = "La correlación es débil.<br>Media observada ≈ Media Real.<br>No se requiere corrección compleja.";
   }
 
   // Flecha de Sesgo
@@ -227,23 +240,16 @@ function updateChart() {
   chart.update();
 }
 
-// Event Listeners
 document.getElementById('threshold').addEventListener('input', updateChart);
-
 document.getElementById('rhoSlider').addEventListener('input', function() {
     currentRho = parseFloat(this.value);
-    generateData(); // Regenerar datos al cambiar Rho
+    generateData(); 
     updateChart();
 });
 
-// Init
 generateData();
 initChart();
 setTimeout(updateChart, 500);
 </script>
 </body>
-</html>
-    
-  </body>
-  
 </html>
